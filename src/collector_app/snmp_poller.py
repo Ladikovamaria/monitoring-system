@@ -5,10 +5,14 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from pysnmp.entity.engine import SnmpEngine
-from pysnmp.hlapi import getCmd
-from pysnmp.hlapi.v3arch import CommunityData, UdpTransportTarget, ContextData
-from pysnmp.smi.rfc1902 import ObjectIdentity, ObjectType
-
+from pysnmp.hlapi import (
+    getCmd,
+    CommunityData,
+    UdpTransportTarget,
+    ContextData,
+    ObjectType,
+    ObjectIdentity,
+)
 
 @dataclass(frozen=True)
 class SnmpSnapshot:
