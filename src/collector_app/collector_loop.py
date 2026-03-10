@@ -56,7 +56,7 @@ def _wait_for_next_completed_pcap(
 def _append_jsonl(path: str, rows: List[Dict[str, Any]]) -> None:
     with open(path, "a", encoding="utf-8") as f:
         for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
 
 
 def run_collector(
