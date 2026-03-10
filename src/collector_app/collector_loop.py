@@ -22,38 +22,34 @@ def _list_pcaps_sorted(captures_dir: str) -> List[str]:
     return files
 
 
-def _wait_until_file_is_stable(path: str, checks: int = 3, delay_sec: float = 0.2) -> None:
+def _wait_for_next_completed_pcap(
+    captures_dir: str,
+    processed_files: set[str],
+    poll_sec: float = 0.5,
+) -> str:
     """
-    Ждём, пока размер файла перестанет меняться.
-    Это нужно, чтобы не начать читать файл, который tcpdump ещё пишет.
+    Ждёт новый завершённый pcap-файл.
+
+    Последний файл считаем текущим (tcpdump ещё пишет в него),
+    поэтому обрабатываем предпоследний.
     """
-    last_size = -1
-    stable_count = 0
-
-    while stable_count < checks:
-        try:
-            size = os.path.getsize(path)
-        except FileNotFoundError:
-            time.sleep(delay_sec)
-            continue
-
-        if size == last_size:
-            stable_count += 1
-        else:
-            stable_count = 0
-            last_size = size
-
-        time.sleep(delay_sec)
-
-
-def _wait_for_next_pcap(captures_dir: str, last_seen: Optional[str], poll_sec: float = 0.5) -> str:
     while True:
         pcaps = _list_pcaps_sorted(captures_dir)
-        if pcaps:
-            newest = pcaps[-1]
-            if newest != last_seen:
-                _wait_until_file_is_stable(newest)
-                return newest
+
+        if len(pcaps) >= 2:
+            completed = pcaps[-2]
+
+            if completed not in processed_files:
+                try:
+                    size = os.path.getsize(completed)
+                except FileNotFoundError:
+                    time.sleep(poll_sec)
+                    continue
+
+                # 24 байта — это только pcap header, полезно иметь больше
+                if size > 24:
+                    return completed
+
         time.sleep(poll_sec)
 
 
@@ -74,16 +70,7 @@ def run_collector(
     backend_url: Optional[str] = None,
     jsonl_path: Optional[str] = None,
 ) -> None:
-    """
-    Главный цикл collector.
-
-    Логика:
-    1. ждём новый pcap-файл
-    2. считаем метрики по VLAN
-    3. делаем SNMP snapshot/rates
-    4. сохраняем строки или отправляем на backend
-    """
-    last_pcap: Optional[str] = None
+    processed_files: set[str] = set()
     prev_snmp: Optional[SnmpSnapshot] = None
 
     print("[collector] started")
@@ -92,8 +79,10 @@ def run_collector(
 
     while True:
         try:
-            pcap_path = _wait_for_next_pcap(captures_dir, last_seen=last_pcap)
-            last_pcap = pcap_path
+            pcap_path = _wait_for_next_completed_pcap(
+                captures_dir=captures_dir,
+                processed_files=processed_files,
+            )
 
             rows, prev_snmp_new = build_feature_rows_for_pcap(
                 pcap_path,
@@ -106,6 +95,7 @@ def run_collector(
             )
 
             prev_snmp = prev_snmp_new
+            processed_files.add(pcap_path)
 
             if not rows:
                 print(f"[collector] skip first window or empty result: {os.path.basename(pcap_path)}")
