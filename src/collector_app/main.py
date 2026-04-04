@@ -1,5 +1,7 @@
+
 # src/collector_app/main.py
 from src.collector_app.collector_loop import run_collector
+from src.common.config import settings
 
 
 if __name__ == "__main__":
@@ -10,6 +12,7 @@ if __name__ == "__main__":
         snmp_community="public",
         if_index=7,
         cpu_oid=None,
-        backend_url=None,  # позже можно поставить URL backend
+        backend_url=None,
         jsonl_path="/var/captures/features.jsonl",
+        db_dsn=settings.database_url,
     )

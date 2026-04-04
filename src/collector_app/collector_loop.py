@@ -10,6 +10,7 @@ import requests
 
 from src.collector_app.feature_builder import build_feature_rows_for_pcap
 from src.collector_app.snmp_poller import SnmpSnapshot
+from src.collector_app.db_writer import PostgresWriter
 
 
 def _list_pcaps_sorted(captures_dir: str) -> List[str]:
@@ -29,9 +30,7 @@ def _wait_for_next_completed_pcap(
 ) -> str:
     """
     Ждёт новый завершённый pcap-файл.
-
-    Последний файл считаем текущим (tcpdump ещё пишет в него),
-    поэтому обрабатываем предпоследний.
+    Последний файл считаем текущим, поэтому читаем предпоследний.
     """
     while True:
         pcaps = _list_pcaps_sorted(captures_dir)
@@ -46,7 +45,6 @@ def _wait_for_next_completed_pcap(
                     time.sleep(poll_sec)
                     continue
 
-                # 24 байта — это только pcap header, полезно иметь больше
                 if size > 24:
                     return completed
 
@@ -69,13 +67,17 @@ def run_collector(
     cpu_oid: Optional[str] = None,
     backend_url: Optional[str] = None,
     jsonl_path: Optional[str] = None,
+    db_dsn: Optional[str] = None,
 ) -> None:
     processed_files: set[str] = set()
     prev_snmp: Optional[SnmpSnapshot] = None
+    db_writer = PostgresWriter(db_dsn) if db_dsn else None
 
     print("[collector] started")
     print(f"[collector] captures_dir={captures_dir}")
     print(f"[collector] snmp_host={snmp_host}, if_index={if_index}")
+    if db_dsn:
+        print("[collector] PostgreSQL enabled")
 
     while True:
         try:
@@ -103,6 +105,12 @@ def run_collector(
 
             if jsonl_path:
                 _append_jsonl(jsonl_path, rows)
+
+            if db_writer:
+                try:
+                    db_writer.insert_feature_rows(rows)
+                except Exception as exc:
+                    print(f"[collector] DB insert failed: {exc}")
 
             if backend_url:
                 try:
