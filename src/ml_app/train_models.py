@@ -1,5 +1,5 @@
 from src.ml_app.db_reader import MetricsDBReader
-from src.ml_app.anomaly_detector import NetworkAnomalyDetector
+
 from src.ml_app.model_registry import ModelRegistry
 
 
@@ -43,6 +43,7 @@ def main():
         return
 
     for vlan_id in vlan_ids:
+        from src.ml_app.anomaly_detector import NetworkAnomalyDetector
         print(f"[train] processing VLAN {vlan_id} ...")
 
         df = db_reader.load_training_data(vlan_id=vlan_id)
