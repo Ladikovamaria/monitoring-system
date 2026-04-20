@@ -1,7 +1,7 @@
 import time
 
 from src.ml_app.db_reader import MetricsDBReader
-from src.ml_app.anomaly_detector import NetworkAnomalyDetector
+
 from src.ml_app.model_registry import ModelRegistry
 
 
@@ -43,6 +43,7 @@ def main():
             continue
 
         for vlan_id in vlan_ids:
+            from src.ml_app.anomaly_detector import NetworkAnomalyDetector
             try:
                 if not registry.model_exists(vlan_id):
                     print(f"[detect] VLAN {vlan_id}: model not found, skipping")
