@@ -33,7 +33,7 @@ def main():
     print("End of DB reading")
 
     registry = ModelRegistry(base_dir=MODEL_DIR)
-
+    print("Succesfully loaded models")
     vlan_ids = db_reader.get_available_vlans()
     print(f"[train] found VLANs: {vlan_ids}")
 
