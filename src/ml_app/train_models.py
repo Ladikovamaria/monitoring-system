@@ -30,6 +30,7 @@ def main():
         db_url=DB_URL,
         table_name=TABLE_NAME,
     )
+    print("End of DB reading")
 
     registry = ModelRegistry(base_dir=MODEL_DIR)
 
