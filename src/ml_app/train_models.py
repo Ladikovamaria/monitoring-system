@@ -43,6 +43,14 @@ def main():
         print(f"[train] processing VLAN {vlan_id} ...")
 
         df = db_reader.load_training_data(vlan_id=vlan_id)
+        print(f"[train] VLAN {vlan_id}: dataframe shape = {df.shape}")
+        print(f"[train] VLAN {vlan_id}: columns = {list(df.columns)}")
+        print(f"[train] VLAN {vlan_id}: nulls =")
+        print(df[FEATURE_COLUMNS].isnull().sum())
+        print(f"[train] VLAN {vlan_id}: dtypes =")
+        print(df[FEATURE_COLUMNS].dtypes)
+        print(f"[train] VLAN {vlan_id}: head =")
+        print(df[FEATURE_COLUMNS].head())
 
         if df.empty:
             print(f"[train] VLAN {vlan_id}: no data, skipped")

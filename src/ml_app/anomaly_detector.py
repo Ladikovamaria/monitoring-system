@@ -89,12 +89,19 @@ class NetworkAnomalyDetector:
         - train_reconstruction_error
         - threshold
         """
+        print("[fit] preparing dataframe...")
         df_prepared = self._prepare_dataframe(df_metrics)
+        print(f"[fit] prepared shape = {df_prepared.shape}")
 
         data = df_prepared[self.feature_columns].values
+        print(f"[fit] raw data shape = {data.shape}")
+        print(f"[fit] raw data dtype = {data.dtype}")
         data_scaled = self.scaler.fit_transform(data)
-
+        print(f"[fit] scaled shape = {data_scaled.shape}")
+        print(f"[fit] scaled min = {np.min(data_scaled)}, max = {np.max(data_scaled)}")
         x_train = self._create_sequences(data_scaled)
+        print(f"[fit] x_train shape = {x_train.shape}")
+        print(f"[fit] x_train dtype = {x_train.dtype}")
 
         early_stopping = EarlyStopping(
             monitor="val_loss",
@@ -102,6 +109,7 @@ class NetworkAnomalyDetector:
             restore_best_weights=True
         )
 
+        print("[fit] starting model.fit()...")
         history = self.model.fit(
             x_train,
             x_train,
