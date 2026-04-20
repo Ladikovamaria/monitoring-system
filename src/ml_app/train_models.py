@@ -25,6 +25,7 @@ FEATURE_COLUMNS = [
 
 
 def main():
+    print("Start trainig")
     db_reader = MetricsDBReader(
         db_url=DB_URL,
         table_name=TABLE_NAME,
