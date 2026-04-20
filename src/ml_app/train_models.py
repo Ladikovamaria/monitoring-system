@@ -9,6 +9,7 @@ MODEL_DIR = "models"
 WINDOW_SIZE = 30
 
 FEATURE_COLUMNS = [
+    "vlan_id",
     "bytes_per_sec",
     "frames_per_sec",
     "broadcast_ratio",
