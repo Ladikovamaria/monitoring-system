@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 from pathlib import Path
 
 
-DB_URL = "postgresql+psycopg2://postgres@localhost:5432/monitsys"
+DB_URL = "postgresql+psycopg2://monitsys_user:12345@localhost:5432/monitsys"
 
 app = FastAPI(title="Network Monitoring Dashboard")
 
