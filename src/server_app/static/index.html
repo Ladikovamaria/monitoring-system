@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Network Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 24px;
+            background: #f5f7fb;
+            color: #222;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+        }
+
+        .cards {
+            display: flex;
+            gap: 16px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            min-width: 180px;
+        }
+
+        .card-title {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .card-value {
+            font-size: 24px;
+            margin-top: 8px;
+            font-weight: bold;
+        }
+
+        .panel {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-top: 20px;
+        }
+
+        select, button {
+            padding: 8px 10px;
+            margin-right: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+
+        th, td {
+            border-bottom: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #f0f2f5;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Система мониторинга Ethernet-сети</h1>
+<p>Минимальная панель мониторинга сетевых метрик</p>
+
+<div class="cards">
+    <div class="card">
+        <div class="card-title">Всего записей</div>
+        <div class="card-value" id="totalRows">—</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Количество VLAN</div>
+        <div class="card-value" id="vlanCount">—</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Последняя запись</div>
+        <div class="card-value" id="lastTimestamp" style="font-size: 14px;">—</div>
+    </div>
+</div>
+
+<div class="panel">
+    <label for="vlanSelect">VLAN:</label>
+    <select id="vlanSelect"></select>
+    <button onclick="loadData()">Обновить</button>
+</div>
+
+<div class="panel">
+    <h2>Сетевая нагрузка</h2>
+    <canvas id="trafficChart"></canvas>
+</div>
+
+<div class="panel">
+    <h2>Последние метрики</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Время</th>
+                <th>VLAN</th>
+                <th>bytes/s</th>
+                <th>frames/s</th>
+                <th>ARP/s</th>
+                <th>active IP</th>
+                <th>flows</th>
+            </tr>
+        </thead>
+        <tbody id="metricsTable"></tbody>
+    </table>
+</div>
+
+<script>
+let trafficChart = null;
+
+async function loadStatus() {
+    const response = await fetch('/api/status');
+    const data = await response.json();
+
+    document.getElementById('totalRows').textContent = data.total_rows;
+    document.getElementById('vlanCount').textContent = data.vlan_count;
+    document.getElementById('lastTimestamp').textContent = data.last_timestamp;
+}
+
+async function loadVlans() {
+    const response = await fetch('/api/vlans');
+    const vlans = await response.json();
+
+    const select = document.getElementById('vlanSelect');
+    select.innerHTML = '';
+
+    for (const vlan of vlans) {
+        const option = document.createElement('option');
+        option.value = vlan;
+        option.textContent = `VLAN ${vlan}`;
+        select.appendChild(option);
+    }
+}
+
+async function loadData() {
+    const vlanId = document.getElementById('vlanSelect').value;
+    const response = await fetch(`/api/metrics?vlan_id=${vlanId}&limit=100`);
+    const data = await response.json();
+
+    drawChart(data);
+    fillTable(data.slice(-20).reverse());
+    loadStatus();
+}
+
+function drawChart(data) {
+    const labels = data.map(row => row.timestamp);
+    const bytes = data.map(row => row.bytes_per_sec);
+    const frames = data.map(row => row.frames_per_sec);
+
+    const ctx = document.getElementById('trafficChart').getContext('2d');
+
+    if (trafficChart) {
+        trafficChart.destroy();
+    }
+
+    trafficChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'bytes_per_sec',
+                    data: bytes,
+                    borderWidth: 2,
+                    tension: 0.2
+                },
+                {
+                    label: 'frames_per_sec',
+                    data: frames,
+                    borderWidth: 2,
+                    tension: 0.2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 10
+                    }
+                }
+            }
+        }
+    });
+}
+
+function fillTable(data) {
+    const tbody = document.getElementById('metricsTable');
+    tbody.innerHTML = '';
+
+    for (const row of data) {
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `
+            <td>${row.timestamp}</td>
+            <td>${row.vlan_id}</td>
+            <td>${row.bytes_per_sec.toFixed(2)}</td>
+            <td>${row.frames_per_sec.toFixed(2)}</td>
+            <td>${row.arp_per_sec.toFixed(2)}</td>
+            <td>${row.active_ip_count}</td>
+            <td>${row.active_flow_count}</td>
+        `;
+
+        tbody.appendChild(tr);
+    }
+}
+
+async function init() {
+    await loadStatus();
+    await loadVlans();
+    await loadData();
+
+    setInterval(loadData, 10000);
+}
+
+init();
+</script>
+
+</body>
+</html>
