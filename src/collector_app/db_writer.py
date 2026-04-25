@@ -70,26 +70,23 @@ class PostgresWriter:
             return
 
         sql = """
-        INSERT INTO interface_status (
-            timestamp,
-            snmp_host,
-            if_index,
-            if_name,
-            if_descr,
-            if_admin_status,
-            if_oper_status,
-            is_up
-        ) VALUES (
-            %(timestamp)s,
-            %(snmp_host)s,
-            %(if_index)s,
-            %(if_name)s,
-            %(if_descr)s,
-            %(if_admin_status)s,
-            %(if_oper_status)s,
-            %(is_up)s
-        )
-        """
+              INSERT INTO interface_status (timestamp, \
+                                            snmp_host, \
+                                            if_index, \
+                                            if_name, \
+                                            if_descr, \
+                                            if_admin_status, \
+                                            if_oper_status, \
+                                            is_up) \
+              VALUES (%(timestamp)s, \
+                      %(snmp_host)s, \
+                      %(if_index)s, \
+                      %(if_name)s, \
+                      %(if_descr)s, \
+                      %(if_admin_status)s, \
+                      %(if_oper_status)s, \
+                      %(is_up)s) \
+              """
 
         conn = psycopg2.connect(self.dsn)
         try:
