@@ -114,7 +114,7 @@ def _get_vlan_id(pkt) -> Optional[int]:
             return int(pkt[Dot1Q].vlan)
         except Exception:
             return 0
-    return None
+    return 0
 
 
 def compute_features_per_vlan_from_pcap(
