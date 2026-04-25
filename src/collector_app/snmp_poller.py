@@ -55,7 +55,7 @@ class SnmpRates:
     snmp_discards_rate: float
 
     if_admin_status: Optional[int]
-    if_oper_status: int
+    if_oper_status: Optional[int]
     snmp_cpu: Optional[int]
 
 
@@ -325,11 +325,7 @@ def poll_all_snmp_snapshots(
     return snapshots
 
 
-def compute_snmp_rates(
-    prev: SnmpSnapshot,
-    curr: SnmpSnapshot,
-    dt_sec: float,
-) -> SnmpRates:
+def compute_snmp_rates(prev: SnmpSnapshot, curr: SnmpSnapshot, dt_sec: float) -> SnmpRates:
     if dt_sec <= 0:
         raise ValueError("dt_sec must be > 0")
 
@@ -337,6 +333,12 @@ def compute_snmp_rates(
     d_out_err = _safe_delta(curr.out_errors, prev.out_errors)
     d_in_disc = _safe_delta(curr.in_discards, prev.in_discards)
     d_out_disc = _safe_delta(curr.out_discards, prev.out_discards)
+
+    if curr.if_oper_status is None:
+        raise RuntimeError(
+            f"ifOperStatus is None for interface "
+            f"if_index={curr.if_index}, if_name={curr.if_name}"
+        )
 
     return SnmpRates(
         if_index=curr.if_index,

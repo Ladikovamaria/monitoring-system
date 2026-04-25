@@ -82,6 +82,13 @@ def build_feature_rows_for_pcap(
             if prev_snapshot is None:
                 continue
 
+            if curr_snapshot.if_oper_status is None:
+                print(
+                    f"[SNMP] skip rates: ifOperStatus is None "
+                    f"host={snmp_host}, if_index={if_index}, if_name={curr_snapshot.if_name}"
+                )
+                continue
+
             rates = compute_snmp_rates(
                 prev_snapshot,
                 curr_snapshot,
