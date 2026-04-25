@@ -106,7 +106,7 @@ class MetricsDBReader:
         ) VALUES (
             :timestamp,
             :vlan_id,
-            :anomaly_score,,
+            :anomaly_score,
             :is_anomaly
         )   
         """
