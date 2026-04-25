@@ -8,7 +8,9 @@ if __name__ == "__main__":
     run_collector(
         captures_dir="/var/captures",
         dt_sec=10.0,
-        snmp_host="10.10.20.1",
+        snmp_hosts=["10.10.20.1",
+                    "10.10.20.10"
+                    ],
         snmp_community="public",
         if_index=7,
         cpu_oid=None,

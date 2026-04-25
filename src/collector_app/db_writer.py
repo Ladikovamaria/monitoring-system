@@ -29,13 +29,6 @@ class PostgresWriter:
             iat_mean,
             iat_std,
 
-            snmp_host,
-            if_index,
-            if_name,
-            if_descr,
-            if_admin_status,
-            if_oper_status,
-
             snmp_in_errors_rate,
             snmp_out_errors_rate,
             snmp_discards_rate,
@@ -54,13 +47,6 @@ class PostgresWriter:
             %(active_flow_count)s,
             %(iat_mean)s,
             %(iat_std)s,
-
-            %(snmp_host)s,
-            %(if_index)s,
-            %(if_name)s,
-            %(if_descr)s,
-            %(if_admin_status)s,
-            %(if_oper_status)s,
 
             %(snmp_in_errors_rate)s,
             %(snmp_out_errors_rate)s,

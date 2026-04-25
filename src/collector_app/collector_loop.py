@@ -57,9 +57,9 @@ def run_collector(
     *,
     captures_dir: str,
     dt_sec: float,
-    snmp_host: str,
+    snmp_hosts: List[str],
     snmp_community: str,
-    if_index: int,  # пока оставляем, чтобы не ломать запуск
+    if_index: int,  # пока оставляем, чтобы не ломать старый запуск
     cpu_oid: Optional[str] = None,
     backend_url: Optional[str] = None,
     jsonl_path: Optional[str] = None,
@@ -67,18 +67,28 @@ def run_collector(
 ) -> None:
     processed_files: set[str] = set()
 
-    # было:
-    # prev_snmp: Optional[SnmpSnapshot] = None
-
-    # стало:
-    prev_snmp_by_if_index: Dict[int, SnmpSnapshot] = {}
+    # Для каждого устройства храним предыдущие SNMP-счётчики по if_index.
+    # Структура:
+    # {
+    #   "192.168.122.10": {
+    #       1: SnmpSnapshot(...),
+    #       2: SnmpSnapshot(...),
+    #   },
+    #   "192.168.122.11": {
+    #       1: SnmpSnapshot(...),
+    #   }
+    # }
+    prev_snmp_by_device: Dict[str, Dict[int, SnmpSnapshot]] = {}
 
     db_writer = PostgresWriter(db_dsn) if db_dsn else None
 
     print("[collector] started")
     print(f"[collector] captures_dir={captures_dir}")
-    print(f"[collector] snmp_host={snmp_host}")
-    print("[collector] SNMP mode: all interfaces")
+    print(f"[collector] snmp_hosts={snmp_hosts}")
+    print("[collector] SNMP mode: all interfaces on all devices")
+
+    if if_index:
+        print(f"[collector] legacy if_index argument ignored: {if_index}")
 
     if db_dsn:
         print("[collector] PostgreSQL enabled")
@@ -90,16 +100,16 @@ def run_collector(
                 processed_files=processed_files,
             )
 
-            rows, prev_snmp_by_if_index_new, interface_status_rows = build_feature_rows_for_pcap(
+            rows, prev_snmp_by_device_new, interface_status_rows = build_feature_rows_for_pcap(
                 pcap_path,
                 default_dt_sec=dt_sec,
-                snmp_host=snmp_host,
+                snmp_hosts=snmp_hosts,
                 snmp_community=snmp_community,
-                prev_snmp_by_if_index=prev_snmp_by_if_index,
+                prev_snmp_by_device=prev_snmp_by_device,
                 cpu_oid=cpu_oid,
             )
 
-            prev_snmp_by_if_index = prev_snmp_by_if_index_new
+            prev_snmp_by_device = prev_snmp_by_device_new
             processed_files.add(pcap_path)
 
             if jsonl_path and rows:
@@ -141,7 +151,7 @@ def run_collector(
                 )
 
             for row in rows:
-                print(row)
+                print("[features]", row)
 
             for row in interface_status_rows:
                 print("[interface_status]", row)
