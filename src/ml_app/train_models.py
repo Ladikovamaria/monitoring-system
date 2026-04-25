@@ -20,6 +20,7 @@ FEATURE_COLUMNS = [
     "snmp_in_errors_rate",
     "snmp_out_errors_rate",
     "snmp_discards_rate",
+    "snmp_cpu",
 
 ]
 

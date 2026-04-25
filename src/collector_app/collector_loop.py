@@ -8,7 +8,6 @@ from typing import Optional, List, Dict, Any
 
 import requests
 
-
 from src.collector_app.feature_builder import build_feature_rows_for_pcap
 from src.collector_app.snmp_poller import SnmpSnapshot
 from src.collector_app.db_writer import PostgresWriter
@@ -29,10 +28,6 @@ def _wait_for_next_completed_pcap(
     processed_files: set[str],
     poll_sec: float = 0.5,
 ) -> str:
-    """
-    Ждёт новый завершённый pcap-файл.
-    Последний файл считаем текущим, поэтому читаем предпоследний.
-    """
     while True:
         pcaps = _list_pcaps_sorted(captures_dir)
 
@@ -64,19 +59,27 @@ def run_collector(
     dt_sec: float,
     snmp_host: str,
     snmp_community: str,
-    if_index: int,
+    if_index: int,  # пока оставляем, чтобы не ломать запуск
     cpu_oid: Optional[str] = None,
     backend_url: Optional[str] = None,
     jsonl_path: Optional[str] = None,
     db_dsn: Optional[str] = None,
 ) -> None:
     processed_files: set[str] = set()
-    prev_snmp: Optional[SnmpSnapshot] = None
+
+    # было:
+    # prev_snmp: Optional[SnmpSnapshot] = None
+
+    # стало:
+    prev_snmp_by_if_index: Dict[int, SnmpSnapshot] = {}
+
     db_writer = PostgresWriter(db_dsn) if db_dsn else None
 
     print("[collector] started")
     print(f"[collector] captures_dir={captures_dir}")
-    print(f"[collector] snmp_host={snmp_host}, if_index={if_index}")
+    print(f"[collector] snmp_host={snmp_host}")
+    print("[collector] SNMP mode: all interfaces")
+
     if db_dsn:
         print("[collector] PostgreSQL enabled")
 
@@ -87,46 +90,66 @@ def run_collector(
                 processed_files=processed_files,
             )
 
-            rows, prev_snmp_new = build_feature_rows_for_pcap(
+            rows, prev_snmp_by_if_index_new, interface_status_rows = build_feature_rows_for_pcap(
                 pcap_path,
                 default_dt_sec=dt_sec,
                 snmp_host=snmp_host,
                 snmp_community=snmp_community,
-                if_index=if_index,
-                prev_snmp=prev_snmp,
+                prev_snmp_by_if_index=prev_snmp_by_if_index,
                 cpu_oid=cpu_oid,
             )
 
-            prev_snmp = prev_snmp_new
+            prev_snmp_by_if_index = prev_snmp_by_if_index_new
             processed_files.add(pcap_path)
 
-            if not rows:
-                print(f"[collector] skip first window or empty result: {os.path.basename(pcap_path)}")
-                continue
-
-            if jsonl_path:
+            if jsonl_path and rows:
                 _append_jsonl(jsonl_path, rows)
 
             if db_writer:
                 try:
-                    db_writer.insert_feature_rows(rows)
+                    if rows:
+                        db_writer.insert_feature_rows(rows)
+
+                    if interface_status_rows:
+                        db_writer.insert_interface_status_rows(interface_status_rows)
+
                 except Exception as exc:
                     print(f"[collector] DB insert failed: {exc}")
 
-            if backend_url:
+            if backend_url and rows:
                 try:
                     response = requests.post(backend_url, json=rows, timeout=5)
                     response.raise_for_status()
                 except Exception as exc:
                     print(f"[collector] backend POST failed: {exc}")
 
-            print(f"[collector] processed {os.path.basename(pcap_path)} -> {len(rows)} row(s)")
+            if not rows:
+                print(
+                    f"[collector] skip first window or empty traffic result: "
+                    f"{os.path.basename(pcap_path)}"
+                )
+            else:
+                print(
+                    f"[collector] processed {os.path.basename(pcap_path)} "
+                    f"-> {len(rows)} feature row(s)"
+                )
+
+            if interface_status_rows:
+                print(
+                    f"[collector] interface statuses: "
+                    f"{len(interface_status_rows)} row(s)"
+                )
+
             for row in rows:
                 print(row)
+
+            for row in interface_status_rows:
+                print("[interface_status]", row)
 
         except KeyboardInterrupt:
             print("[collector] stopped by user")
             break
+
         except Exception as exc:
             print(f"[collector] error: {exc}")
             time.sleep(1.0)

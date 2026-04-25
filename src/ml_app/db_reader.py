@@ -21,7 +21,6 @@ class MetricsDBReader:
         query = text(f"""
             SELECT DISTINCT vlan_id
             FROM {self.table_name}
-            WHERE vlan_id IS NOT NULL
             ORDER BY vlan_id
         """)
 
@@ -93,6 +92,34 @@ class MetricsDBReader:
         df = pd.read_sql(query, self.engine, params=params)
         return df
 
+    def insert_anomaly_result(
+            self,
+            *,
+            timestamp,
+            vlan_id: int,
+            anomaly_score: float,
+            is_anomaly: bool,
+    ) -> None:
+        sql = """
+        INSERT INTO anomaly_results (
+            timestamp, vlan_id, anomaly_score, is_anomaly
+        ) VALUES (
+            :timestamp,
+            :vlan_id,
+            :anomaly_score,,
+            :is_anomaly
+        )   
+        """
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(sql),
+                {
+                    "timestamp": timestamp,
+                    "vlan_id": int(vlan_id),
+                    "anomaly_score": float(anomaly_score),
+                    "is_anomaly": bool(is_anomaly),
+                },
+            )
     def load_data_between(
         self,
         vlan_id: int,

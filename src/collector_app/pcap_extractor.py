@@ -113,7 +113,7 @@ def _get_vlan_id(pkt) -> Optional[int]:
         try:
             return int(pkt[Dot1Q].vlan)
         except Exception:
-            return None
+            return 0
     return None
 
 
@@ -146,7 +146,7 @@ def compute_features_per_vlan_from_pcap(
                 continue
 
             vlan = _get_vlan_id(pkt)
-            if vlan is None:
+            if vlan is 0:
                 if not include_untagged:
                     continue
                 vlan = untagged_vlan_id

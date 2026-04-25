@@ -68,6 +68,13 @@ def main():
 
                 result = detector.score_last_window(df_last)
 
+                db_reader.insert_anomaly_result(
+                    timestamp=df_last.iloc[-1]["timestamp"],
+                    vlan_id=vlan_id,
+                    anomaly_score=result["anomaly_score"],
+                    is_anomaly=result["is_anomaly"],
+                )
+
                 print(
                     f"[detect] VLAN {vlan_id} | "
                     f"score={result['anomaly_score']:.6f} | "

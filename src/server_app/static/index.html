@@ -71,6 +71,20 @@
         th {
             background: #f0f2f5;
         }
+
+        .status-up {
+            color: green;
+            font-weight: bold;
+        }
+
+        .status-down {
+            color: red;
+            font-weight: bold;
+        }
+
+        .warning-row {
+            background: #ffe8e8;
+        }
     </style>
 </head>
 <body>
@@ -122,6 +136,25 @@
     </table>
 </div>
 
+<div class="panel">
+    <h2>Статус интерфейсов</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Время</th>
+                <th>Host</th>
+                <th>ifIndex</th>
+                <th>Имя</th>
+                <th>Описание</th>
+                <th>Admin status</th>
+                <th>Oper status</th>
+                <th>Состояние</th>
+            </tr>
+        </thead>
+        <tbody id="interfacesTable"></tbody>
+    </table>
+</div>
+
 <script>
 let trafficChart = null;
 
@@ -144,7 +177,13 @@ async function loadVlans() {
     for (const vlan of vlans) {
         const option = document.createElement('option');
         option.value = vlan;
-        option.textContent = `VLAN ${vlan}`;
+
+        if (Number(vlan) === 0) {
+            option.textContent = 'Без VLAN';
+        } else {
+            option.textContent = `VLAN ${vlan}`;
+        }
+
         select.appendChild(option);
     }
 }
@@ -157,6 +196,39 @@ async function loadData() {
     drawChart(data);
     fillTable(data.slice(-20).reverse());
     loadStatus();
+}
+
+async function loadInterfaces() {
+    const response = await fetch('/api/interfaces');
+    const data = await response.json();
+
+    const tbody = document.getElementById('interfacesTable');
+    tbody.innerHTML = '';
+
+    for (const row of data) {
+        const tr = document.createElement('tr');
+
+        const isUp = row.is_up === true;
+        const statusText = isUp ? 'UP' : 'DOWN';
+        const statusClass = isUp ? 'status-up' : 'status-down';
+
+        if (!isUp) {
+            tr.classList.add('warning-row');
+        }
+
+        tr.innerHTML = `
+            <td>${row.timestamp}</td>
+            <td>${row.snmp_host ?? ''}</td>
+            <td>${row.if_index ?? ''}</td>
+            <td>${row.if_name ?? ''}</td>
+            <td>${row.if_descr ?? ''}</td>
+            <td>${row.if_admin_status ?? ''}</td>
+            <td>${row.if_oper_status ?? ''}</td>
+            <td class="${statusClass}">${statusText}</td>
+        `;
+
+        tbody.appendChild(tr);
+    }
 }
 
 function drawChart(data) {
@@ -210,9 +282,11 @@ function fillTable(data) {
     for (const row of data) {
         const tr = document.createElement('tr');
 
+        const vlanText = Number(row.vlan_id) === 0 ? 'Без VLAN' : row.vlan_id;
+
         tr.innerHTML = `
             <td>${row.timestamp}</td>
-            <td>${row.vlan_id}</td>
+            <td>${vlanText}</td>
             <td>${row.bytes_per_sec.toFixed(2)}</td>
             <td>${row.frames_per_sec.toFixed(2)}</td>
             <td>${row.arp_per_sec.toFixed(2)}</td>
@@ -228,8 +302,10 @@ async function init() {
     await loadStatus();
     await loadVlans();
     await loadData();
+    await loadInterfaces();
 
     setInterval(loadData, 10000);
+    setInterval(loadInterfaces, 5000);
 }
 
 init();

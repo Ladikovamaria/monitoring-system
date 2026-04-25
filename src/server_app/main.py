@@ -47,7 +47,6 @@ def get_vlans():
     query = text("""
         SELECT DISTINCT vlan_id
         FROM features
-        WHERE vlan_id IS NOT NULL
         ORDER BY vlan_id
     """)
 
@@ -101,6 +100,41 @@ def get_metrics(
             "snmp_out_errors_rate": float(row["snmp_out_errors_rate"] or 0),
             "snmp_discards_rate": float(row["snmp_discards_rate"] or 0),
             "if_oper_status": row["if_oper_status"],
+        })
+
+    return result
+
+
+@app.get("/api/interfaces")
+def get_interfaces():
+    query = text("""
+        SELECT DISTINCT ON (if_index)
+            timestamp,
+            snmp_host,
+            if_index,
+            if_name,
+            if_descr,
+            if_admin_status,
+            if_oper_status,
+            is_up
+        FROM interface_status
+        ORDER BY if_index, timestamp DESC
+    """)
+
+    with engine.connect() as conn:
+        rows = conn.execute(query).mappings().all()
+
+    result = []
+    for row in rows:
+        result.append({
+            "timestamp": str(row["timestamp"]),
+            "snmp_host": row["snmp_host"],
+            "if_index": row["if_index"],
+            "if_name": row["if_name"],
+            "if_descr": row["if_descr"],
+            "if_admin_status": row["if_admin_status"],
+            "if_oper_status": row["if_oper_status"],
+            "is_up": row["is_up"],
         })
 
     return result
