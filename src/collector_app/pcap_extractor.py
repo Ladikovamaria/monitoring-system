@@ -146,7 +146,7 @@ def compute_features_per_vlan_from_pcap(
                 continue
 
             vlan = _get_vlan_id(pkt)
-            if vlan is 0:
+            if vlan == 0:
                 if not include_untagged:
                     continue
                 vlan = untagged_vlan_id
