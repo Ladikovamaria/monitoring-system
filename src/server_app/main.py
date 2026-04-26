@@ -144,7 +144,7 @@ def get_anomalies(
     vlan_id: int | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
 ):
-    if vlan_id is None:
+    if vlan_id == 0:
         query = text("""
             SELECT
                 timestamp,
