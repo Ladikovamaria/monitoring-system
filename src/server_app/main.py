@@ -99,7 +99,6 @@ def get_metrics(
             "snmp_in_errors_rate": float(row["snmp_in_errors_rate"] or 0),
             "snmp_out_errors_rate": float(row["snmp_out_errors_rate"] or 0),
             "snmp_discards_rate": float(row["snmp_discards_rate"] or 0),
-            "if_oper_status": row["if_oper_status"],
         })
 
     return result
