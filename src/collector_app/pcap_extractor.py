@@ -104,16 +104,17 @@ def _extract_flow_5tuple(pkt) -> Optional[Tuple[str, str, int, int, int]]:
     return (ip.src, ip.dst, 0, 0, proto)
 
 
-def _get_vlan_id(pkt) -> Optional[int]:
+def _get_vlan_id(pkt) -> int:
     """
     Возвращает VLAN ID из 802.1Q тега.
-    Если кадр без тега, возвращает None.
+    Если кадр без тега, возвращает 0.
     """
     if Dot1Q in pkt:
         try:
             return int(pkt[Dot1Q].vlan)
         except Exception:
             return 0
+
     return 0
 
 

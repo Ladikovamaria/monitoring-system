@@ -93,30 +93,26 @@ class MetricsDBReader:
         return df
 
     def insert_anomaly_result(
-        self,
-        *,
-        timestamp,
-        vlan_id: int,
-        anomaly_score: float,
-        is_anomaly: bool,
+            self,
+            *,
+            timestamp,
+            vlan_id: int,
+            anomaly_score: float,
+            is_anomaly: bool,
     ) -> None:
-        sql = text("""
-                   INSERT INTO anomaly_results (timestamp,
-                                                vlan_id,
-                                                anomaly_score,
-                                                is_anomaly)
-                   VALUES (:timestamp,
-                           :vlan_id,
-                           :anomaly_score,
-                           :is_anomaly) ON CONFLICT (timestamp, vlan_id) DO
-                   UPDATE SET
-                       anomaly_score = EXCLUDED.anomaly_score,
-                       is_anomaly = EXCLUDED.is_anomaly
-                   """)
-
+        sql = """
+        INSERT INTO anomaly_results (
+            timestamp, vlan_id, anomaly_score, is_anomaly
+        ) VALUES (
+            :timestamp,
+            :vlan_id,
+            :anomaly_score,
+            :is_anomaly
+        )   
+        """
         with self.engine.begin() as conn:
             conn.execute(
-                sql,
+                text(sql),
                 {
                     "timestamp": timestamp,
                     "vlan_id": int(vlan_id),
