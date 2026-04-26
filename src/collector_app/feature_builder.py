@@ -111,31 +111,38 @@ def build_feature_rows_for_pcap(
 
     main_snmp_host = snmp_hosts[0]
     main_rates_by_if_index = all_rates_by_device.get(main_snmp_host, {})
+    MAIN_IF_INDEX = 7
+
+    main_snmp_rates = main_rates_by_if_index.get(MAIN_IF_INDEX)
+
+    if main_snmp_rates is None:
+        print(f"[features] no SNMP rates for main interface if_index={MAIN_IF_INDEX}")
+        return [], new_prev_snmp_by_device, interface_status_rows
 
     for vf in vlan_rows:
-        for _if_index, snmp_rates in main_rates_by_if_index.items():
-            row = {
-                "timestamp": datetime.fromtimestamp(
-                    vf.timestamp_end,
-                    tz=timezone.utc,
-                ),
+        row = {
+            "timestamp": datetime.fromtimestamp(
+                vf.timestamp_end,
+                tz=timezone.utc,
+            ),
 
-                "vlan_id": vf.vlan_id if vf.vlan_id is not None else 0,
+            "vlan_id": vf.vlan_id if vf.vlan_id is not None else 0,
 
-                "bytes_per_sec": vf.bytes_per_sec,
-                "frames_per_sec": vf.frames_per_sec,
-                "broadcast_ratio": vf.broadcast_ratio,
-                "arp_per_sec": vf.arp_per_sec,
-                "active_ip_count": vf.active_ip_count,
-                "active_flow_count": vf.active_flow_count,
-                "iat_mean": vf.iat_mean,
-                "iat_std": vf.iat_std,
+            "bytes_per_sec": vf.bytes_per_sec,
+            "frames_per_sec": vf.frames_per_sec,
+            "broadcast_ratio": vf.broadcast_ratio,
+            "arp_per_sec": vf.arp_per_sec,
+            "active_ip_count": vf.active_ip_count,
+            "active_flow_count": vf.active_flow_count,
+            "iat_mean": vf.iat_mean,
+            "iat_std": vf.iat_std,
 
-                **snmp_rates,
+            **main_snmp_rates,
 
-                "pcap_file": pcap_path.split("/")[-1],
-            }
+            "pcap_file": pcap_path.split("/")[-1],
+        }
 
-            out.append(row)
+        out.append(row)
+
 
     return out, new_prev_snmp_by_device, interface_status_rows
