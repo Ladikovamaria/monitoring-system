@@ -138,3 +138,47 @@ def get_interfaces():
         })
 
     return result
+
+@app.get("/api/anomalies")
+def get_anomalies(
+    vlan_id: int | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    if vlan_id is None:
+        query = text("""
+            SELECT
+                timestamp,
+                vlan_id,
+                anomaly_score,
+                is_anomaly
+            FROM anomaly_results
+            ORDER BY timestamp DESC
+            LIMIT :limit
+        """)
+        params = {"limit": limit}
+    else:
+        query = text("""
+            SELECT
+                timestamp,
+                vlan_id,
+                anomaly_score,
+                is_anomaly
+            FROM anomaly_results
+            WHERE vlan_id = :vlan_id
+            ORDER BY timestamp DESC
+            LIMIT :limit
+        """)
+        params = {"vlan_id": vlan_id, "limit": limit}
+
+    with engine.connect() as conn:
+        rows = conn.execute(query, params).mappings().all()
+
+    return [
+        {
+            "timestamp": str(row["timestamp"]),
+            "vlan_id": row["vlan_id"],
+            "anomaly_score": float(row["anomaly_score"] or 0),
+            "is_anomaly": row["is_anomaly"],
+        }
+        for row in rows
+    ]

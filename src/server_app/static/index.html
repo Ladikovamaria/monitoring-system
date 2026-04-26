@@ -72,25 +72,32 @@
             background: #f0f2f5;
         }
 
-        .status-up {
+        .status-up,
+        .normal-badge {
             color: green;
             font-weight: bold;
         }
 
-        .status-down {
+        .status-down,
+        .anomaly-badge {
             color: red;
             font-weight: bold;
         }
 
-        .warning-row {
+        .warning-row,
+        .anomaly-row {
             background: #ffe8e8;
+        }
+
+        .normal-row {
+            background: #eaffea;
         }
     </style>
 </head>
 <body>
 
 <h1>Система мониторинга Ethernet-сети</h1>
-<p>Минимальная панель мониторинга сетевых метрик</p>
+<p>Панель мониторинга сетевых метрик, статусов интерфейсов и аномалий</p>
 
 <div class="cards">
     <div class="card">
@@ -137,6 +144,21 @@
 </div>
 
 <div class="panel">
+    <h2>Результаты обнаружения аномалий</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Время</th>
+                <th>VLAN</th>
+                <th>Anomaly score</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody id="anomaliesTable"></tbody>
+    </table>
+</div>
+
+<div class="panel">
     <h2>Статус интерфейсов</h2>
     <table>
         <thead>
@@ -177,13 +199,7 @@ async function loadVlans() {
     for (const vlan of vlans) {
         const option = document.createElement('option');
         option.value = vlan;
-
-        if (Number(vlan) === 0) {
-            option.textContent = 'Без VLAN';
-        } else {
-            option.textContent = `VLAN ${vlan}`;
-        }
-
+        option.textContent = Number(vlan) === 0 ? 'Без VLAN' : `VLAN ${vlan}`;
         select.appendChild(option);
     }
 }
@@ -195,7 +211,38 @@ async function loadData() {
 
     drawChart(data);
     fillTable(data.slice(-20).reverse());
-    loadStatus();
+    await loadStatus();
+    await loadAnomalies();
+}
+
+async function loadAnomalies() {
+    const vlanId = document.getElementById('vlanSelect').value;
+    const response = await fetch(`/api/anomalies?vlan_id=${vlanId}&limit=20`);
+    const data = await response.json();
+
+    const tbody = document.getElementById('anomaliesTable');
+    tbody.innerHTML = '';
+
+    for (const row of data) {
+        const tr = document.createElement('tr');
+
+        const isAnomaly = row.is_anomaly === true;
+        const statusText = isAnomaly ? 'АНОМАЛИЯ' : 'Норма';
+        const statusClass = isAnomaly ? 'anomaly-badge' : 'normal-badge';
+
+        tr.classList.add(isAnomaly ? 'anomaly-row' : 'normal-row');
+
+        const vlanText = Number(row.vlan_id) === 0 ? 'Без VLAN' : row.vlan_id;
+
+        tr.innerHTML = `
+            <td>${row.timestamp}</td>
+            <td>${vlanText}</td>
+            <td>${Number(row.anomaly_score).toFixed(6)}</td>
+            <td class="${statusClass}">${statusText}</td>
+        `;
+
+        tbody.appendChild(tr);
+    }
 }
 
 async function loadInterfaces() {
