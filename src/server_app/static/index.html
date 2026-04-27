@@ -50,9 +50,15 @@
             margin-top: 20px;
         }
 
-        select, button {
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        select, button, input {
             padding: 8px 10px;
-            margin-right: 8px;
         }
 
         table {
@@ -70,6 +76,19 @@
 
         th {
             background: #f0f2f5;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 20px;
+        }
+
+        .chart-box {
+            background: #fff;
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid #e4e4e4;
         }
 
         .status-up,
@@ -115,14 +134,30 @@
 </div>
 
 <div class="panel">
-    <label for="vlanSelect">VLAN:</label>
-    <select id="vlanSelect"></select>
-    <button onclick="loadData()">Обновить</button>
+    <h2>Настройки отображения</h2>
+    <div class="controls">
+        <label>
+            Метрик:
+            <input id="metricsLimit" type="number" min="10" max="1000" value="100">
+        </label>
+
+        <label>
+            Аномалий:
+            <input id="anomaliesLimit" type="number" min="10" max="500" value="50">
+        </label>
+
+        <button onclick="loadData()">Обновить</button>
+    </div>
 </div>
 
 <div class="panel">
-    <h2>Сетевая нагрузка</h2>
-    <canvas id="trafficChart"></canvas>
+    <h2>Общая активность всех VLAN</h2>
+    <canvas id="allVlansChart"></canvas>
+</div>
+
+<div class="panel">
+    <h2>Графики по VLAN</h2>
+    <div class="charts-grid" id="vlanChartsGrid"></div>
 </div>
 
 <div class="panel">
@@ -178,7 +213,12 @@
 </div>
 
 <script>
-let trafficChart = null;
+let allVlansChart = null;
+let vlanCharts = {};
+
+function vlanLabel(vlan) {
+    return Number(vlan) === 0 ? 'Без VLAN' : `VLAN ${vlan}`;
+}
 
 async function loadStatus() {
     const response = await fetch('/api/status');
@@ -189,35 +229,15 @@ async function loadStatus() {
     document.getElementById('lastTimestamp').textContent = data.last_timestamp;
 }
 
-async function loadVlans() {
-    const response = await fetch('/api/vlans');
-    const vlans = await response.json();
-
-    const select = document.getElementById('vlanSelect');
-    select.innerHTML = '';
-
-    for (const vlan of vlans) {
-        const option = document.createElement('option');
-        option.value = vlan;
-        option.textContent = Number(vlan) === 0 ? 'Без VLAN' : `VLAN ${vlan}`;
-        select.appendChild(option);
-    }
-}
-
-async function loadData() {
-    const vlanId = document.getElementById('vlanSelect').value;
-    const response = await fetch(`/api/metrics?vlan_id=${vlanId}&limit=100`);
-    const data = await response.json();
-
-    drawChart(data);
-    fillTable(data.slice(-20).reverse());
-    await loadStatus();
-    await loadAnomalies();
+async function loadMetrics() {
+    const limit = document.getElementById('metricsLimit').value;
+    const response = await fetch(`/api/metrics?limit=${limit}`);
+    return await response.json();
 }
 
 async function loadAnomalies() {
-    const vlanId = document.getElementById('vlanSelect').value;
-    const response = await fetch(`/api/anomalies?vlan_id=${vlanId}&limit=20`);
+    const limit = document.getElementById('anomaliesLimit').value;
+    const response = await fetch(`/api/anomalies?limit=${limit}`);
     const data = await response.json();
 
     const tbody = document.getElementById('anomaliesTable');
@@ -227,16 +247,14 @@ async function loadAnomalies() {
         const tr = document.createElement('tr');
 
         const isAnomaly = row.is_anomaly === true;
+        tr.classList.add(isAnomaly ? 'anomaly-row' : 'normal-row');
+
         const statusText = isAnomaly ? 'АНОМАЛИЯ' : 'Норма';
         const statusClass = isAnomaly ? 'anomaly-badge' : 'normal-badge';
 
-        tr.classList.add(isAnomaly ? 'anomaly-row' : 'normal-row');
-
-        const vlanText = Number(row.vlan_id) === 0 ? 'Без VLAN' : row.vlan_id;
-
         tr.innerHTML = `
             <td>${row.timestamp}</td>
-            <td>${vlanText}</td>
+            <td>${vlanLabel(row.vlan_id)}</td>
             <td>${Number(row.anomaly_score).toFixed(6)}</td>
             <td class="${statusClass}">${statusText}</td>
         `;
@@ -278,43 +296,53 @@ async function loadInterfaces() {
     }
 }
 
-function drawChart(data) {
-    const labels = data.map(row => row.timestamp);
-    const bytes = data.map(row => row.bytes_per_sec);
-    const frames = data.map(row => row.frames_per_sec);
+function groupByVlan(data) {
+    const grouped = {};
 
-    const ctx = document.getElementById('trafficChart').getContext('2d');
-
-    if (trafficChart) {
-        trafficChart.destroy();
+    for (const row of data) {
+        const vlan = row.vlan_id;
+        if (!grouped[vlan]) {
+            grouped[vlan] = [];
+        }
+        grouped[vlan].push(row);
     }
 
-    trafficChart = new Chart(ctx, {
+    return grouped;
+}
+
+function drawAllVlansChart(data) {
+    const grouped = groupByVlan(data);
+
+    const datasets = Object.entries(grouped).map(([vlan, rows]) => ({
+        label: vlanLabel(vlan),
+        data: rows.map(row => ({
+            x: row.timestamp,
+            y: row.bytes_per_sec
+        })),
+        borderWidth: 2,
+        tension: 0.2
+    }));
+
+    const ctx = document.getElementById('allVlansChart').getContext('2d');
+
+    if (allVlansChart) {
+        allVlansChart.destroy();
+    }
+
+    allVlansChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'bytes_per_sec',
-                    data: bytes,
-                    borderWidth: 2,
-                    tension: 0.2
-                },
-                {
-                    label: 'frames_per_sec',
-                    data: frames,
-                    borderWidth: 2,
-                    tension: 0.2
-                }
-            ]
+            datasets: datasets
         },
         options: {
             responsive: true,
             animation: false,
+            parsing: false,
             scales: {
                 x: {
+                    type: 'category',
                     ticks: {
-                        maxTicksLimit: 10
+                        maxTicksLimit: 12
                     }
                 }
             }
@@ -322,21 +350,85 @@ function drawChart(data) {
     });
 }
 
-function fillTable(data) {
+function drawVlanCharts(data) {
+    const grouped = groupByVlan(data);
+    const grid = document.getElementById('vlanChartsGrid');
+
+    grid.innerHTML = '';
+
+    for (const chartId in vlanCharts) {
+        vlanCharts[chartId].destroy();
+    }
+    vlanCharts = {};
+
+    for (const [vlan, rows] of Object.entries(grouped)) {
+        const box = document.createElement('div');
+        box.className = 'chart-box';
+
+        const title = document.createElement('h3');
+        title.textContent = vlanLabel(vlan);
+
+        const canvas = document.createElement('canvas');
+        const canvasId = `vlanChart_${vlan}`;
+        canvas.id = canvasId;
+
+        box.appendChild(title);
+        box.appendChild(canvas);
+        grid.appendChild(box);
+
+        const labels = rows.map(row => row.timestamp);
+
+        const ctx = canvas.getContext('2d');
+
+        vlanCharts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'bytes_per_sec',
+                        data: rows.map(row => row.bytes_per_sec),
+                        borderWidth: 2,
+                        tension: 0.2
+                    },
+                    {
+                        label: 'frames_per_sec',
+                        data: rows.map(row => row.frames_per_sec),
+                        borderWidth: 2,
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                scales: {
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 8
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function fillMetricsTable(data) {
     const tbody = document.getElementById('metricsTable');
     tbody.innerHTML = '';
 
-    for (const row of data) {
-        const tr = document.createElement('tr');
+    const sorted = [...data].reverse();
 
-        const vlanText = Number(row.vlan_id) === 0 ? 'Без VLAN' : row.vlan_id;
+    for (const row of sorted) {
+        const tr = document.createElement('tr');
 
         tr.innerHTML = `
             <td>${row.timestamp}</td>
-            <td>${vlanText}</td>
-            <td>${row.bytes_per_sec.toFixed(2)}</td>
-            <td>${row.frames_per_sec.toFixed(2)}</td>
-            <td>${row.arp_per_sec.toFixed(2)}</td>
+            <td>${vlanLabel(row.vlan_id)}</td>
+            <td>${Number(row.bytes_per_sec).toFixed(2)}</td>
+            <td>${Number(row.frames_per_sec).toFixed(2)}</td>
+            <td>${Number(row.arp_per_sec).toFixed(2)}</td>
             <td>${row.active_ip_count}</td>
             <td>${row.active_flow_count}</td>
         `;
@@ -345,9 +437,19 @@ function fillTable(data) {
     }
 }
 
+async function loadData() {
+    const metrics = await loadMetrics();
+
+    drawAllVlansChart(metrics);
+    drawVlanCharts(metrics);
+    fillMetricsTable(metrics);
+
+    await loadStatus();
+    await loadAnomalies();
+}
+
 async function init() {
     await loadStatus();
-    await loadVlans();
     await loadData();
     await loadInterfaces();
 
