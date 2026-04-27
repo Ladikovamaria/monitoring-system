@@ -23,11 +23,18 @@
             flex-wrap: wrap;
         }
 
-        .card {
+        .card, .panel {
             background: white;
             padding: 16px;
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .panel {
+            margin-top: 20px;
+        }
+
+        .card {
             min-width: 180px;
         }
 
@@ -42,14 +49,6 @@
             font-weight: bold;
         }
 
-        .panel {
-            background: white;
-            padding: 16px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            margin-top: 20px;
-        }
-
         .controls {
             display: flex;
             gap: 12px;
@@ -59,6 +58,19 @@
 
         select, button, input {
             padding: 8px 10px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 20px;
+        }
+
+        .chart-box {
+            background: #fff;
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid #e4e4e4;
         }
 
         table {
@@ -76,19 +88,6 @@
 
         th {
             background: #f0f2f5;
-        }
-
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-            gap: 20px;
-        }
-
-        .chart-box {
-            background: #fff;
-            border-radius: 12px;
-            padding: 12px;
-            border: 1px solid #e4e4e4;
         }
 
         .status-up,
@@ -137,8 +136,22 @@
     <h2>Настройки отображения</h2>
     <div class="controls">
         <label>
-            Метрик:
-            <input id="metricsLimit" type="number" min="10" max="1000" value="100">
+            Метрика:
+            <select id="metricSelect" onchange="loadData()">
+                <option value="bytes_per_sec">bytes_per_sec</option>
+                <option value="frames_per_sec">frames_per_sec</option>
+                <option value="arp_per_sec">arp_per_sec</option>
+                <option value="active_ip_count">active_ip_count</option>
+                <option value="active_flow_count">active_flow_count</option>
+                <option value="snmp_in_errors_rate">snmp_in_errors_rate</option>
+                <option value="snmp_out_errors_rate">snmp_out_errors_rate</option>
+                <option value="snmp_discards_rate">snmp_discards_rate</option>
+            </select>
+        </label>
+
+        <label>
+            Метрик на VLAN:
+            <input id="metricsLimit" type="number" min="10" max="2000" value="200">
         </label>
 
         <label>
@@ -215,48 +228,77 @@
 <script>
 let allVlansChart = null;
 let vlanCharts = {};
+let currentMetric = "bytes_per_sec";
 
 function vlanLabel(vlan) {
-    return Number(vlan) === 0 ? 'Без VLAN' : `VLAN ${vlan}`;
+    return Number(vlan) === 0 ? "Без VLAN" : `VLAN ${vlan}`;
+}
+
+function formatTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function autoDownsample(data) {
+    if (data.length > 500) return data.filter((_, i) => i % 10 === 0);
+    if (data.length > 200) return data.filter((_, i) => i % 5 === 0);
+    if (data.length > 100) return data.filter((_, i) => i % 2 === 0);
+    return data;
 }
 
 async function loadStatus() {
-    const response = await fetch('/api/status');
+    const response = await fetch("/api/status");
     const data = await response.json();
 
-    document.getElementById('totalRows').textContent = data.total_rows;
-    document.getElementById('vlanCount').textContent = data.vlan_count;
-    document.getElementById('lastTimestamp').textContent = data.last_timestamp;
+    document.getElementById("totalRows").textContent = data.total_rows;
+    document.getElementById("vlanCount").textContent = data.vlan_count;
+    document.getElementById("lastTimestamp").textContent = data.last_timestamp;
 }
 
-async function loadMetrics() {
-    const limit = document.getElementById('metricsLimit').value;
-    const response = await fetch(`/api/metrics?limit=${limit}`);
+async function loadVlans() {
+    const response = await fetch("/api/vlans");
     return await response.json();
 }
 
+async function loadMetricsForAllVlans() {
+    const limit = document.getElementById("metricsLimit").value;
+    const vlans = await loadVlans();
+
+    let allData = [];
+
+    for (const vlan of vlans) {
+        const response = await fetch(`/api/metrics?vlan_id=${vlan}&limit=${limit}`);
+        const data = await response.json();
+        allData = allData.concat(data);
+    }
+
+    return allData;
+}
+
 async function loadAnomalies() {
-    const limit = document.getElementById('anomaliesLimit').value;
+    const limit = document.getElementById("anomaliesLimit").value;
     const response = await fetch(`/api/anomalies?limit=${limit}`);
     const data = await response.json();
 
-    const tbody = document.getElementById('anomaliesTable');
-    tbody.innerHTML = '';
+    const tbody = document.getElementById("anomaliesTable");
+    tbody.innerHTML = "";
 
     for (const row of data) {
-        const tr = document.createElement('tr');
-
+        const tr = document.createElement("tr");
         const isAnomaly = row.is_anomaly === true;
-        tr.classList.add(isAnomaly ? 'anomaly-row' : 'normal-row');
 
-        const statusText = isAnomaly ? 'АНОМАЛИЯ' : 'Норма';
-        const statusClass = isAnomaly ? 'anomaly-badge' : 'normal-badge';
+        tr.classList.add(isAnomaly ? "anomaly-row" : "normal-row");
 
         tr.innerHTML = `
-            <td>${row.timestamp}</td>
+            <td>${formatTime(row.timestamp)}</td>
             <td>${vlanLabel(row.vlan_id)}</td>
             <td>${Number(row.anomaly_score).toFixed(6)}</td>
-            <td class="${statusClass}">${statusText}</td>
+            <td class="${isAnomaly ? "anomaly-badge" : "normal-badge"}">
+                ${isAnomaly ? "АНОМАЛИЯ" : "Норма"}
+            </td>
         `;
 
         tbody.appendChild(tr);
@@ -264,32 +306,31 @@ async function loadAnomalies() {
 }
 
 async function loadInterfaces() {
-    const response = await fetch('/api/interfaces');
+    const response = await fetch("/api/interfaces");
     const data = await response.json();
 
-    const tbody = document.getElementById('interfacesTable');
-    tbody.innerHTML = '';
+    const tbody = document.getElementById("interfacesTable");
+    tbody.innerHTML = "";
 
     for (const row of data) {
-        const tr = document.createElement('tr');
-
+        const tr = document.createElement("tr");
         const isUp = row.is_up === true;
-        const statusText = isUp ? 'UP' : 'DOWN';
-        const statusClass = isUp ? 'status-up' : 'status-down';
 
         if (!isUp) {
-            tr.classList.add('warning-row');
+            tr.classList.add("warning-row");
         }
 
         tr.innerHTML = `
-            <td>${row.timestamp}</td>
-            <td>${row.snmp_host ?? ''}</td>
-            <td>${row.if_index ?? ''}</td>
-            <td>${row.if_name ?? ''}</td>
-            <td>${row.if_descr ?? ''}</td>
-            <td>${row.if_admin_status ?? ''}</td>
-            <td>${row.if_oper_status ?? ''}</td>
-            <td class="${statusClass}">${statusText}</td>
+            <td>${formatTime(row.timestamp)}</td>
+            <td>${row.snmp_host ?? ""}</td>
+            <td>${row.if_index ?? ""}</td>
+            <td>${row.if_name ?? ""}</td>
+            <td>${row.if_descr ?? ""}</td>
+            <td>${row.if_admin_status ?? ""}</td>
+            <td>${row.if_oper_status ?? ""}</td>
+            <td class="${isUp ? "status-up" : "status-down"}">
+                ${isUp ? "UP" : "DOWN"}
+            </td>
         `;
 
         tbody.appendChild(tr);
@@ -301,10 +342,16 @@ function groupByVlan(data) {
 
     for (const row of data) {
         const vlan = row.vlan_id;
+
         if (!grouped[vlan]) {
             grouped[vlan] = [];
         }
+
         grouped[vlan].push(row);
+    }
+
+    for (const vlan in grouped) {
+        grouped[vlan].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     }
 
     return grouped;
@@ -313,34 +360,50 @@ function groupByVlan(data) {
 function drawAllVlansChart(data) {
     const grouped = groupByVlan(data);
 
-    const datasets = Object.entries(grouped).map(([vlan, rows]) => ({
-        label: vlanLabel(vlan),
-        data: rows.map(row => ({
-            x: row.timestamp,
-            y: row.bytes_per_sec
-        })),
-        borderWidth: 2,
-        tension: 0.2
-    }));
+    const longestRows = Object.values(grouped)
+        .sort((a, b) => b.length - a.length)[0] || [];
 
-    const ctx = document.getElementById('allVlansChart').getContext('2d');
+    const sampledLabelsRows = autoDownsample(longestRows);
+    const labels = sampledLabelsRows.map(row => formatTime(row.timestamp));
+
+    const datasets = Object.entries(grouped).map(([vlan, rows]) => {
+        const sampledRows = autoDownsample(rows);
+
+        return {
+            label: vlanLabel(vlan),
+            data: sampledRows.map(row => Number(row[currentMetric] ?? 0)),
+            borderWidth: 2,
+            tension: 0.2,
+            fill: false
+        };
+    });
+
+    const ctx = document.getElementById("allVlansChart").getContext("2d");
 
     if (allVlansChart) {
         allVlansChart.destroy();
     }
 
     allVlansChart = new Chart(ctx, {
-        type: 'line',
+        type: "line",
         data: {
-            datasets: datasets
+            labels,
+            datasets
         },
         options: {
             responsive: true,
             animation: false,
-            parsing: false,
+            plugins: {
+                legend: {
+                    position: "top"
+                },
+                title: {
+                    display: true,
+                    text: currentMetric
+                }
+            },
             scales: {
                 x: {
-                    type: 'category',
                     ticks: {
                         maxTicksLimit: 12
                     }
@@ -352,23 +415,26 @@ function drawAllVlansChart(data) {
 
 function drawVlanCharts(data) {
     const grouped = groupByVlan(data);
-    const grid = document.getElementById('vlanChartsGrid');
+    const grid = document.getElementById("vlanChartsGrid");
 
-    grid.innerHTML = '';
+    grid.innerHTML = "";
 
     for (const chartId in vlanCharts) {
         vlanCharts[chartId].destroy();
     }
+
     vlanCharts = {};
 
     for (const [vlan, rows] of Object.entries(grouped)) {
-        const box = document.createElement('div');
-        box.className = 'chart-box';
+        const sampledRows = autoDownsample(rows);
 
-        const title = document.createElement('h3');
+        const box = document.createElement("div");
+        box.className = "chart-box";
+
+        const title = document.createElement("h3");
         title.textContent = vlanLabel(vlan);
 
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         const canvasId = `vlanChart_${vlan}`;
         canvas.id = canvasId;
 
@@ -376,32 +442,31 @@ function drawVlanCharts(data) {
         box.appendChild(canvas);
         grid.appendChild(box);
 
-        const labels = rows.map(row => row.timestamp);
-
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
 
         vlanCharts[canvasId] = new Chart(ctx, {
-            type: 'line',
+            type: "line",
             data: {
-                labels: labels,
+                labels: sampledRows.map(row => formatTime(row.timestamp)),
                 datasets: [
                     {
-                        label: 'bytes_per_sec',
-                        data: rows.map(row => row.bytes_per_sec),
+                        label: currentMetric,
+                        data: sampledRows.map(row => Number(row[currentMetric] ?? 0)),
                         borderWidth: 2,
-                        tension: 0.2
-                    },
-                    {
-                        label: 'frames_per_sec',
-                        data: rows.map(row => row.frames_per_sec),
-                        borderWidth: 2,
-                        tension: 0.2
+                        tension: 0.2,
+                        fill: false
                     }
                 ]
             },
             options: {
                 responsive: true,
                 animation: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: currentMetric
+                    }
+                },
                 scales: {
                     x: {
                         ticks: {
@@ -415,16 +480,18 @@ function drawVlanCharts(data) {
 }
 
 function fillMetricsTable(data) {
-    const tbody = document.getElementById('metricsTable');
-    tbody.innerHTML = '';
+    const tbody = document.getElementById("metricsTable");
+    tbody.innerHTML = "";
 
-    const sorted = [...data].reverse();
+    const sorted = [...data].sort(
+        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
 
-    for (const row of sorted) {
-        const tr = document.createElement('tr');
+    for (const row of sorted.slice(0, 50)) {
+        const tr = document.createElement("tr");
 
         tr.innerHTML = `
-            <td>${row.timestamp}</td>
+            <td>${formatTime(row.timestamp)}</td>
             <td>${vlanLabel(row.vlan_id)}</td>
             <td>${Number(row.bytes_per_sec).toFixed(2)}</td>
             <td>${Number(row.frames_per_sec).toFixed(2)}</td>
@@ -438,7 +505,9 @@ function fillMetricsTable(data) {
 }
 
 async function loadData() {
-    const metrics = await loadMetrics();
+    currentMetric = document.getElementById("metricSelect").value;
+
+    const metrics = await loadMetricsForAllVlans();
 
     drawAllVlansChart(metrics);
     drawVlanCharts(metrics);
