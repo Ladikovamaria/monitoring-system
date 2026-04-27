@@ -66,6 +66,8 @@ def main():
                     print(f"[detect] VLAN {vlan_id}: not enough data")
                     continue
 
+
+
                 result = detector.score_last_window(df_last)
 
                 db_reader.insert_anomaly_result(

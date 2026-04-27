@@ -100,16 +100,17 @@ class MetricsDBReader:
             anomaly_score: float,
             is_anomaly: bool,
     ) -> None:
-        sql = """
-        INSERT INTO anomaly_results (
-            timestamp, vlan_id, anomaly_score, is_anomaly
-        ) VALUES (
-            :timestamp,
-            :vlan_id,
-            :anomaly_score,
-            :is_anomaly
-        )   
-        """
+        sql = text("""
+                   INSERT INTO anomaly_results (timestamp,
+                                                vlan_id,
+                                                anomaly_score,
+                                                is_anomaly)
+                   VALUES (:timestamp,
+                           :vlan_id,
+                           :anomaly_score,
+                           :is_anomaly) ON CONFLICT (timestamp, vlan_id)
+            DO NOTHING
+                   """)
         with self.engine.begin() as conn:
             conn.execute(
                 text(sql),
