@@ -111,9 +111,10 @@ class MetricsDBReader:
                            :is_anomaly) ON CONFLICT (timestamp, vlan_id)
             DO NOTHING
                    """)
+
         with self.engine.begin() as conn:
             conn.execute(
-                text(sql),
+                sql,
                 {
                     "timestamp": timestamp,
                     "vlan_id": int(vlan_id),
@@ -121,6 +122,8 @@ class MetricsDBReader:
                     "is_anomaly": bool(is_anomaly),
                 },
             )
+
+
     def load_data_between(
         self,
         vlan_id: int,
