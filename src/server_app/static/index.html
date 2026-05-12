@@ -3,61 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <title>Network Monitoring Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 24px;
             background: #f5f7fb;
             color: #222;
         }
 
-        h1 {
-            margin-bottom: 8px;
-        }
-
-        .cards {
-            display: flex;
-            gap: 16px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-
-        .card, .panel {
-            background: white;
-            padding: 16px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .panel {
-            margin-top: 20px;
-        }
-
-        .card {
-            min-width: 180px;
-        }
-
-        .card-title {
-            color: #666;
-            font-size: 14px;
+        .dashboard-card {
+            border: none;
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
         }
 
         .card-value {
-            font-size: 24px;
-            margin-top: 8px;
+            font-size: 26px;
             font-weight: bold;
         }
 
-        .controls {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        select, button, input {
-            padding: 8px 10px;
+        .panel {
+            background: white;
+            padding: 18px;
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            margin-top: 20px;
         }
 
         .charts-grid {
@@ -69,25 +42,8 @@
         .chart-box {
             background: #fff;
             border-radius: 12px;
-            padding: 12px;
+            padding: 14px;
             border: 1px solid #e4e4e4;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-            font-size: 14px;
-        }
-
-        th, td {
-            border-bottom: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-
-        th {
-            background: #f0f2f5;
         }
 
         .status-up,
@@ -97,12 +53,22 @@
         }
 
         .status-down,
-        .anomaly-badge {
+        .anomaly-badge,
+        .critical-badge {
             color: red;
             font-weight: bold;
         }
 
-        .warning-row,
+        .warning-badge {
+            color: #d67c00;
+            font-weight: bold;
+        }
+
+        .warning-row {
+            background: #fff3cd;
+        }
+
+        .critical-row,
         .anomaly-row {
             background: #ffe8e8;
         }
@@ -110,73 +76,185 @@
         .normal-row {
             background: #eaffea;
         }
+
+        #topology {
+            height: 360px;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            background: #fafafa;
+        }
+
+        .alert-log {
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        table {
+            font-size: 14px;
+        }
     </style>
 </head>
+
 <body>
+<div class="container-fluid p-4">
 
-<h1>Система мониторинга Ethernet-сети</h1>
-<p>Панель мониторинга сетевых метрик, статусов интерфейсов и аномалий</p>
+    <h1>Система мониторинга Ethernet-сети</h1>
+    <p class="text-muted">
+        Панель мониторинга сетевых метрик, состояния интерфейсов и результатов обнаружения аномалий
+    </p>
 
-<div class="cards">
-    <div class="card">
-        <div class="card-title">Всего записей</div>
-        <div class="card-value" id="totalRows">—</div>
+    <!-- Web-panel monitoring -->
+    <div class="row g-3">
+        <div class="col-md-2">
+            <div class="card dashboard-card p-3">
+                <div class="text-muted">Всего записей</div>
+                <div class="card-value" id="totalRows">—</div>
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <div class="card dashboard-card p-3">
+                <div class="text-muted">Количество VLAN</div>
+                <div class="card-value" id="vlanCount">—</div>
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <div class="card dashboard-card p-3">
+                <div class="text-muted">Интерфейсов UP</div>
+                <div class="card-value text-success" id="interfacesUp">—</div>
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <div class="card dashboard-card p-3">
+                <div class="text-muted">Интерфейсов DOWN</div>
+                <div class="card-value text-danger" id="interfacesDown">—</div>
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <div class="card dashboard-card p-3">
+                <div class="text-muted">Активные предупреждения</div>
+                <div class="card-value text-warning" id="activeWarnings">—</div>
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <div class="card dashboard-card p-3">
+                <div class="text-muted">Последняя запись</div>
+                <div class="fw-bold" id="lastTimestamp">—</div>
+            </div>
+        </div>
     </div>
-    <div class="card">
-        <div class="card-title">Количество VLAN</div>
-        <div class="card-value" id="vlanCount">—</div>
+
+    <!-- Critical alerts -->
+    <div class="panel">
+        <h2>Активные предупреждения</h2>
+        <div id="activeAlerts" class="alert-log">
+            <div class="alert alert-success">Критические события не обнаружены</div>
+        </div>
     </div>
-    <div class="card">
-        <div class="card-title">Последняя запись</div>
-        <div class="card-value" id="lastTimestamp" style="font-size: 14px;">—</div>
+
+    <!-- Controls -->
+    <div class="panel">
+        <h2>Настройки отображения</h2>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Метрика для графиков по VLAN</label>
+                <select id="metricSelect" class="form-select" onchange="loadData()">
+                    <option value="bytes_per_sec">bytes_per_sec</option>
+                    <option value="frames_per_sec">frames_per_sec</option>
+                    <option value="arp_per_sec">arp_per_sec</option>
+                    <option value="active_ip_count">active_ip_count</option>
+                    <option value="active_flow_count">active_flow_count</option>
+                    <option value="snmp_in_errors_rate">snmp_in_errors_rate</option>
+                    <option value="snmp_out_errors_rate">snmp_out_errors_rate</option>
+                    <option value="snmp_discards_rate">snmp_discards_rate</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Метрик на VLAN</label>
+                <input id="metricsLimit" class="form-control" type="number" min="10" max="2000" value="200">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Аномалий</label>
+                <input id="anomaliesLimit" class="form-control" type="number" min="10" max="500" value="50">
+            </div>
+
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" onclick="loadData()">Обновить</button>
+            </div>
+        </div>
     </div>
-</div>
 
-<div class="panel">
-    <h2>Настройки отображения</h2>
-    <div class="controls">
-        <label>
-            Метрика:
-            <select id="metricSelect" onchange="loadData()">
-                <option value="bytes_per_sec">bytes_per_sec</option>
-                <option value="frames_per_sec">frames_per_sec</option>
-                <option value="arp_per_sec">arp_per_sec</option>
-                <option value="active_ip_count">active_ip_count</option>
-                <option value="active_flow_count">active_flow_count</option>
-                <option value="snmp_in_errors_rate">snmp_in_errors_rate</option>
-                <option value="snmp_out_errors_rate">snmp_out_errors_rate</option>
-                <option value="snmp_discards_rate">snmp_discards_rate</option>
-            </select>
-        </label>
+    <!-- Main charts -->
+    <div class="panel">
+        <h2>Графики и визуализация временных рядов</h2>
 
-        <label>
-            Метрик на VLAN:
-            <input id="metricsLimit" type="number" min="10" max="2000" value="200">
-        </label>
+        <div class="charts-grid">
+            <div class="chart-box">
+                <h4>Сетевая нагрузка</h4>
+                <canvas id="trafficChart"></canvas>
+            </div>
 
-        <label>
-            Аномалий:
-            <input id="anomaliesLimit" type="number" min="10" max="500" value="50">
-        </label>
+            <div class="chart-box">
+                <h4>SNMP-метрики</h4>
+                <canvas id="snmpChart"></canvas>
+            </div>
 
-        <button onclick="loadData()">Обновить</button>
+            <div class="chart-box">
+                <h4>Оценка аномальности</h4>
+                <canvas id="anomalyChart"></canvas>
+            </div>
+        </div>
     </div>
-</div>
 
-<div class="panel">
-    <h2>Общая активность всех VLAN</h2>
-    <canvas id="allVlansChart"></canvas>
-</div>
+    <!-- VLAN charts -->
+    <div class="panel">
+        <h2>Графики по VLAN</h2>
+        <p class="text-muted">Отдельное отображение выбранной метрики для каждого VLAN</p>
+        <div class="charts-grid" id="vlanChartsGrid"></div>
+    </div>
 
-<div class="panel">
-    <h2>Графики по VLAN</h2>
-    <div class="charts-grid" id="vlanChartsGrid"></div>
-</div>
+    <!-- Current state -->
+    <div class="panel">
+        <h2>Текущее состояние сети</h2>
 
-<div class="panel">
-    <h2>Последние метрики</h2>
-    <table>
-        <thead>
+        <div class="row">
+            <div class="col-lg-7">
+                <h4>Статус интерфейсов</h4>
+                <table class="table table-sm table-hover">
+                    <thead>
+                    <tr>
+                        <th>Время</th>
+                        <th>Host</th>
+                        <th>ifIndex</th>
+                        <th>Имя</th>
+                        <th>Описание</th>
+                        <th>Admin</th>
+                        <th>Oper</th>
+                        <th>Состояние</th>
+                    </tr>
+                    </thead>
+                    <tbody id="interfacesTable"></tbody>
+                </table>
+            </div>
+
+            <div class="col-lg-5">
+                <h4>Топология сети</h4>
+                <div id="topology"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics table -->
+    <div class="panel">
+        <h2>Последние сетевые метрики</h2>
+        <table class="table table-sm table-hover">
+            <thead>
             <tr>
                 <th>Время</th>
                 <th>VLAN</th>
@@ -186,55 +264,54 @@
                 <th>active IP</th>
                 <th>flows</th>
             </tr>
-        </thead>
-        <tbody id="metricsTable"></tbody>
-    </table>
-</div>
+            </thead>
+            <tbody id="metricsTable"></tbody>
+        </table>
+    </div>
 
-<div class="panel">
-    <h2>Результаты обнаружения аномалий</h2>
-    <table>
-        <thead>
+    <!-- Anomaly archive -->
+    <div class="panel">
+        <h2>Архив обнаруженных аномалий</h2>
+        <table class="table table-sm table-hover">
+            <thead>
             <tr>
                 <th>Время</th>
                 <th>VLAN</th>
                 <th>Anomaly score</th>
                 <th>Статус</th>
             </tr>
-        </thead>
-        <tbody id="anomaliesTable"></tbody>
-    </table>
-</div>
+            </thead>
+            <tbody id="anomaliesTable"></tbody>
+        </table>
+    </div>
 
-<div class="panel">
-    <h2>Статус интерфейсов</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Время</th>
-                <th>Host</th>
-                <th>ifIndex</th>
-                <th>Имя</th>
-                <th>Описание</th>
-                <th>Admin status</th>
-                <th>Oper status</th>
-                <th>Состояние</th>
-            </tr>
-        </thead>
-        <tbody id="interfacesTable"></tbody>
-    </table>
+    <!-- Report -->
+    <div class="panel">
+        <h2>Автоматически сформированный отчёт</h2>
+        <div id="reportBlock">
+            <p>Отчёт формируется после загрузки данных.</p>
+        </div>
+    </div>
+
 </div>
 
 <script>
-let allVlansChart = null;
+let trafficChart = null;
+let snmpChart = null;
+let anomalyChart = null;
 let vlanCharts = {};
+let topologyNetwork = null;
 let currentMetric = "bytes_per_sec";
+let cachedMetrics = [];
+let cachedAnomalies = [];
+let cachedInterfaces = [];
 
 function vlanLabel(vlan) {
     return Number(vlan) === 0 ? "Без VLAN" : `VLAN ${vlan}`;
 }
 
 function formatTime(ts) {
+    if (!ts) return "";
     const d = new Date(ts);
     return d.toLocaleTimeString("ru-RU", {
         hour: "2-digit",
@@ -281,60 +358,18 @@ async function loadMetricsForAllVlans() {
 async function loadAnomalies() {
     const limit = document.getElementById("anomaliesLimit").value;
     const response = await fetch(`/api/anomalies?limit=${limit}`);
-    const data = await response.json();
+    cachedAnomalies = await response.json();
 
-    const tbody = document.getElementById("anomaliesTable");
-    tbody.innerHTML = "";
-
-    for (const row of data) {
-        const tr = document.createElement("tr");
-        const isAnomaly = row.is_anomaly === true;
-
-        tr.classList.add(isAnomaly ? "anomaly-row" : "normal-row");
-
-        tr.innerHTML = `
-            <td>${formatTime(row.timestamp)}</td>
-            <td>${vlanLabel(row.vlan_id)}</td>
-            <td>${Number(row.anomaly_score).toFixed(6)}</td>
-            <td class="${isAnomaly ? "anomaly-badge" : "normal-badge"}">
-                ${isAnomaly ? "АНОМАЛИЯ" : "Норма"}
-            </td>
-        `;
-
-        tbody.appendChild(tr);
-    }
+    fillAnomaliesTable(cachedAnomalies);
 }
 
 async function loadInterfaces() {
     const response = await fetch("/api/interfaces");
-    const data = await response.json();
+    cachedInterfaces = await response.json();
 
-    const tbody = document.getElementById("interfacesTable");
-    tbody.innerHTML = "";
-
-    for (const row of data) {
-        const tr = document.createElement("tr");
-        const isUp = row.is_up === true;
-
-        if (!isUp) {
-            tr.classList.add("warning-row");
-        }
-
-        tr.innerHTML = `
-            <td>${formatTime(row.timestamp)}</td>
-            <td>${row.snmp_host ?? ""}</td>
-            <td>${row.if_index ?? ""}</td>
-            <td>${row.if_name ?? ""}</td>
-            <td>${row.if_descr ?? ""}</td>
-            <td>${row.if_admin_status ?? ""}</td>
-            <td>${row.if_oper_status ?? ""}</td>
-            <td class="${isUp ? "status-up" : "status-down"}">
-                ${isUp ? "UP" : "DOWN"}
-            </td>
-        `;
-
-        tbody.appendChild(tr);
-    }
+    fillInterfacesTable(cachedInterfaces);
+    drawTopology(cachedInterfaces);
+    updateDashboardCards();
 }
 
 function groupByVlan(data) {
@@ -342,11 +377,7 @@ function groupByVlan(data) {
 
     for (const row of data) {
         const vlan = row.vlan_id;
-
-        if (!grouped[vlan]) {
-            grouped[vlan] = [];
-        }
-
+        if (!grouped[vlan]) grouped[vlan] = [];
         grouped[vlan].push(row);
     }
 
@@ -357,63 +388,149 @@ function groupByVlan(data) {
     return grouped;
 }
 
-function drawAllVlansChart(data) {
+function destroyChart(chart) {
+    if (chart) chart.destroy();
+}
+
+function drawTrafficChart(data) {
     const grouped = groupByVlan(data);
+    const labelsSource = autoDownsample(
+        Object.values(grouped).sort((a, b) => b.length - a.length)[0] || []
+    );
 
-    const longestRows = Object.values(grouped)
-        .sort((a, b) => b.length - a.length)[0] || [];
+    const labels = labelsSource.map(row => formatTime(row.timestamp));
 
-    const sampledLabelsRows = autoDownsample(longestRows);
-    const labels = sampledLabelsRows.map(row => formatTime(row.timestamp));
+    const datasets = [];
 
-    const datasets = Object.entries(grouped).map(([vlan, rows]) => {
+    for (const [vlan, rows] of Object.entries(grouped)) {
         const sampledRows = autoDownsample(rows);
-
-        return {
-            label: vlanLabel(vlan),
-            data: sampledRows.map(row => Number(row[currentMetric] ?? 0)),
+        datasets.push({
+            label: `${vlanLabel(vlan)} bytes/s`,
+            data: sampledRows.map(row => Number(row.bytes_per_sec ?? 0)),
             borderWidth: 2,
             tension: 0.2,
             fill: false
-        };
-    });
-
-    const ctx = document.getElementById("allVlansChart").getContext("2d");
-
-    if (allVlansChart) {
-        allVlansChart.destroy();
+        });
     }
 
-    allVlansChart = new Chart(ctx, {
+    const ctx = document.getElementById("trafficChart").getContext("2d");
+    destroyChart(trafficChart);
+
+    trafficChart = new Chart(ctx, {
+        type: "line",
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            animation: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: "Сетевая нагрузка по VLAN"
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 12 } }
+            }
+        }
+    });
+}
+
+function drawSnmpChart(data) {
+    const sorted = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const sampled = autoDownsample(sorted);
+
+    const labels = sampled.map(row => formatTime(row.timestamp));
+
+    const ctx = document.getElementById("snmpChart").getContext("2d");
+    destroyChart(snmpChart);
+
+    snmpChart = new Chart(ctx, {
         type: "line",
         data: {
             labels,
-            datasets
+            datasets: [
+                {
+                    label: "snmp_in_errors_rate",
+                    data: sampled.map(row => Number(row.snmp_in_errors_rate ?? 0)),
+                    borderWidth: 2,
+                    tension: 0.2,
+                    fill: false
+                },
+                {
+                    label: "snmp_out_errors_rate",
+                    data: sampled.map(row => Number(row.snmp_out_errors_rate ?? 0)),
+                    borderWidth: 2,
+                    tension: 0.2,
+                    fill: false
+                },
+                {
+                    label: "snmp_discards_rate",
+                    data: sampled.map(row => Number(row.snmp_discards_rate ?? 0)),
+                    borderWidth: 2,
+                    tension: 0.2,
+                    fill: false
+                }
+            ]
         },
         options: {
             responsive: true,
             animation: false,
             plugins: {
-                legend: {
-                    position: "top"
-                },
                 title: {
                     display: true,
-                    text: currentMetric
+                    text: "Ошибки и отброшенные пакеты"
                 }
             },
             scales: {
-                x: {
-                    ticks: {
-                        maxTicksLimit: 12
-                    }
+                x: { ticks: { maxTicksLimit: 12 } }
+            }
+        }
+    });
+}
+
+function drawAnomalyChart(data) {
+    const sorted = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const sampled = autoDownsample(sorted);
+
+    const labels = sampled.map(row => formatTime(row.timestamp));
+    const scores = sampled.map(row => Number(row.anomaly_score ?? 0));
+
+    const ctx = document.getElementById("anomalyChart").getContext("2d");
+    destroyChart(anomalyChart);
+
+    anomalyChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: "anomaly_score",
+                    data: scores,
+                    borderWidth: 2,
+                    tension: 0.2,
+                    fill: false
                 }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: "Оценка аномальности во времени"
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 12 } }
             }
         }
     });
 }
 
 function drawVlanCharts(data) {
+    currentMetric = document.getElementById("metricSelect").value;
+
     const grouped = groupByVlan(data);
     const grid = document.getElementById("vlanChartsGrid");
 
@@ -431,7 +548,7 @@ function drawVlanCharts(data) {
         const box = document.createElement("div");
         box.className = "chart-box";
 
-        const title = document.createElement("h3");
+        const title = document.createElement("h4");
         title.textContent = vlanLabel(vlan);
 
         const canvas = document.createElement("canvas");
@@ -468,11 +585,7 @@ function drawVlanCharts(data) {
                     }
                 },
                 scales: {
-                    x: {
-                        ticks: {
-                            maxTicksLimit: 8
-                        }
-                    }
+                    x: { ticks: { maxTicksLimit: 8 } }
                 }
             }
         });
@@ -493,37 +606,257 @@ function fillMetricsTable(data) {
         tr.innerHTML = `
             <td>${formatTime(row.timestamp)}</td>
             <td>${vlanLabel(row.vlan_id)}</td>
-            <td>${Number(row.bytes_per_sec).toFixed(2)}</td>
-            <td>${Number(row.frames_per_sec).toFixed(2)}</td>
-            <td>${Number(row.arp_per_sec).toFixed(2)}</td>
-            <td>${row.active_ip_count}</td>
-            <td>${row.active_flow_count}</td>
+            <td>${Number(row.bytes_per_sec ?? 0).toFixed(2)}</td>
+            <td>${Number(row.frames_per_sec ?? 0).toFixed(2)}</td>
+            <td>${Number(row.arp_per_sec ?? 0).toFixed(2)}</td>
+            <td>${row.active_ip_count ?? 0}</td>
+            <td>${row.active_flow_count ?? 0}</td>
         `;
 
         tbody.appendChild(tr);
     }
 }
 
+function fillAnomaliesTable(data) {
+    const tbody = document.getElementById("anomaliesTable");
+    tbody.innerHTML = "";
+
+    for (const row of data) {
+        const tr = document.createElement("tr");
+        const isAnomaly = row.is_anomaly === true;
+
+        tr.classList.add(isAnomaly ? "anomaly-row" : "normal-row");
+
+        tr.innerHTML = `
+            <td>${formatTime(row.timestamp)}</td>
+            <td>${vlanLabel(row.vlan_id)}</td>
+            <td>${Number(row.anomaly_score ?? 0).toFixed(6)}</td>
+            <td class="${isAnomaly ? "anomaly-badge" : "normal-badge"}">
+                ${isAnomaly ? "АНОМАЛИЯ" : "Норма"}
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    }
+}
+
+function fillInterfacesTable(data) {
+    const tbody = document.getElementById("interfacesTable");
+    tbody.innerHTML = "";
+
+    for (const row of data) {
+        const tr = document.createElement("tr");
+        const isUp = row.is_up === true || row.if_oper_status === 1;
+
+        if (!isUp) tr.classList.add("warning-row");
+
+        tr.innerHTML = `
+            <td>${formatTime(row.timestamp)}</td>
+            <td>${row.snmp_host ?? row.device_ip ?? ""}</td>
+            <td>${row.if_index ?? ""}</td>
+            <td>${row.if_name ?? ""}</td>
+            <td>${row.if_descr ?? ""}</td>
+            <td>${row.if_admin_status ?? ""}</td>
+            <td>${row.if_oper_status ?? ""}</td>
+            <td class="${isUp ? "status-up" : "status-down"}">
+                ${isUp ? "UP" : "DOWN"}
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    }
+}
+
+function updateAlerts() {
+    const container = document.getElementById("activeAlerts");
+    container.innerHTML = "";
+
+    let count = 0;
+
+    const latestAnomalies = cachedAnomalies
+        .filter(row => row.is_anomaly === true)
+        .slice(0, 5);
+
+    for (const row of latestAnomalies) {
+        count++;
+        container.innerHTML += `
+            <div class="alert alert-danger">
+                <strong>Critical:</strong> обнаружена аномалия в ${vlanLabel(row.vlan_id)}.
+                Anomaly score: ${Number(row.anomaly_score ?? 0).toFixed(6)}.
+                Время: ${formatTime(row.timestamp)}.
+            </div>
+        `;
+    }
+
+    const downInterfaces = cachedInterfaces
+        .filter(row => !(row.is_up === true || row.if_oper_status === 1))
+        .slice(0, 5);
+
+    for (const row of downInterfaces) {
+        count++;
+        container.innerHTML += `
+            <div class="alert alert-warning">
+                <strong>Warning:</strong> интерфейс ${row.if_name ?? row.if_index}
+                устройства ${row.snmp_host ?? row.device_ip ?? ""} находится в состоянии DOWN.
+            </div>
+        `;
+    }
+
+    if (count === 0) {
+        container.innerHTML = `<div class="alert alert-success">Критические события не обнаружены</div>`;
+    }
+
+    document.getElementById("activeWarnings").textContent = count;
+}
+
+function updateDashboardCards() {
+    const up = cachedInterfaces.filter(row => row.is_up === true || row.if_oper_status === 1).length;
+    const down = cachedInterfaces.length - up;
+
+    document.getElementById("interfacesUp").textContent = up;
+    document.getElementById("interfacesDown").textContent = down;
+}
+
+function drawTopology(interfaces) {
+    const container = document.getElementById("topology");
+
+    const nodes = [];
+    const edges = [];
+
+    nodes.push({
+        id: "server",
+        label: "Monitoring Server",
+        shape: "box"
+    });
+
+    const devices = new Set();
+
+    for (const row of interfaces) {
+        const host = row.snmp_host ?? row.device_ip ?? "device";
+        devices.add(host);
+    }
+
+    for (const host of devices) {
+        nodes.push({
+            id: host,
+            label: host,
+            shape: "box"
+        });
+
+        edges.push({
+            from: "server",
+            to: host,
+            label: "SNMP/API"
+        });
+    }
+
+    for (const row of interfaces) {
+        const host = row.snmp_host ?? row.device_ip ?? "device";
+        const ifaceId = `${host}_${row.if_index}`;
+        const isUp = row.is_up === true || row.if_oper_status === 1;
+
+        nodes.push({
+            id: ifaceId,
+            label: row.if_name ?? `if${row.if_index}`,
+            color: isUp ? "#b7f7b7" : "#ffb3b3"
+        });
+
+        edges.push({
+            from: host,
+            to: ifaceId
+        });
+    }
+
+    const data = {
+        nodes: new vis.DataSet(nodes),
+        edges: new vis.DataSet(edges)
+    };
+
+    const options = {
+        physics: {
+            stabilization: true
+        },
+        nodes: {
+            font: {
+                size: 14
+            }
+        },
+        edges: {
+            arrows: "to",
+            font: {
+                align: "middle"
+            }
+        }
+    };
+
+    if (topologyNetwork) {
+        topologyNetwork.destroy();
+    }
+
+    topologyNetwork = new vis.Network(container, data, options);
+}
+
+function buildReport() {
+    const report = document.getElementById("reportBlock");
+
+    const totalAnomalies = cachedAnomalies.filter(row => row.is_anomaly === true).length;
+    const maxScore = cachedAnomalies.length
+        ? Math.max(...cachedAnomalies.map(row => Number(row.anomaly_score ?? 0)))
+        : 0;
+
+    const up = cachedInterfaces.filter(row => row.is_up === true || row.if_oper_status === 1).length;
+    const down = cachedInterfaces.length - up;
+
+    const sortedMetrics = [...cachedMetrics].sort(
+        (a, b) => Number(b.bytes_per_sec ?? 0) - Number(a.bytes_per_sec ?? 0)
+    );
+
+    const maxLoad = sortedMetrics[0];
+
+    report.innerHTML = `
+        <ul>
+            <li>Количество загруженных записей метрик: <strong>${cachedMetrics.length}</strong></li>
+            <li>Количество обнаруженных аномальных состояний: <strong>${totalAnomalies}</strong></li>
+            <li>Максимальное значение anomaly score: <strong>${maxScore.toFixed(6)}</strong></li>
+            <li>Интерфейсов в состоянии UP: <strong>${up}</strong></li>
+            <li>Интерфейсов в состоянии DOWN: <strong>${down}</strong></li>
+            <li>Максимальная зафиксированная нагрузка:
+                <strong>${maxLoad ? Number(maxLoad.bytes_per_sec ?? 0).toFixed(2) : 0} bytes/s</strong>
+                ${maxLoad ? `(${vlanLabel(maxLoad.vlan_id)})` : ""}
+            </li>
+        </ul>
+    `;
+}
+
 async function loadData() {
     currentMetric = document.getElementById("metricSelect").value;
 
-    const metrics = await loadMetricsForAllVlans();
+    cachedMetrics = await loadMetricsForAllVlans();
 
-    drawAllVlansChart(metrics);
-    drawVlanCharts(metrics);
-    fillMetricsTable(metrics);
+    drawTrafficChart(cachedMetrics);
+    drawSnmpChart(cachedMetrics);
+    drawVlanCharts(cachedMetrics);
+    fillMetricsTable(cachedMetrics);
 
     await loadStatus();
     await loadAnomalies();
+
+    drawAnomalyChart(cachedAnomalies);
+    updateAlerts();
+    buildReport();
 }
 
 async function init() {
     await loadStatus();
-    await loadData();
     await loadInterfaces();
+    await loadData();
 
     setInterval(loadData, 10000);
-    setInterval(loadInterfaces, 5000);
+    setInterval(async () => {
+        await loadInterfaces();
+        updateAlerts();
+        buildReport();
+    }, 5000);
 }
 
 init();
