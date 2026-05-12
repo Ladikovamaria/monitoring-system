@@ -46,7 +46,7 @@ def main():
         from src.ml_app.anomaly_detector import NetworkAnomalyDetector
         print(f"[train] processing VLAN {vlan_id} ...")
 
-        df = db_reader.load_training_data(vlan_id=vlan_id)
+        df = db_reader.load_training_data(vlan_id=vlan_id, limit=300)
         print(f"[train] VLAN {vlan_id}: dataframe shape = {df.shape}")
         print(f"[train] VLAN {vlan_id}: columns = {list(df.columns)}")
         print(f"[train] VLAN {vlan_id}: nulls =")
