@@ -26,7 +26,7 @@ class MetricsDBReader:
         """)
 
         with self.engine.connect() as conn:
-            result = conn.execute(query)
+            result = conn.execute(query, {"limit": limit})
             vlans = [row[0] for row in result.fetchall()]
 
         return vlans
