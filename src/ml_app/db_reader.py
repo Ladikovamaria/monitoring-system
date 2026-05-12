@@ -17,11 +17,12 @@ class MetricsDBReader:
         self.table_name = table_name
         self.engine = create_engine(self.db_url)
 
-    def get_available_vlans(self) -> list[int]:
+    def get_available_vlans(self, limit: int | None = None ) -> list[int]:
         query = text(f"""
             SELECT DISTINCT vlan_id
             FROM {self.table_name}
-            ORDER BY vlan_id
+            ORDER BY vlan_id 
+            LIMIT :limit
         """)
 
         with self.engine.connect() as conn:
