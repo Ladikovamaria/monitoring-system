@@ -35,7 +35,7 @@ def main():
     registry = ModelRegistry(base_dir=MODEL_DIR)
     print("Succesfully loaded models")
     #vlan_ids = db_reader.get_available_vlans(limit=300)
-    vlan_ids = [10,20]
+    vlan_ids = [0,10,20]
     print(f"[train] found VLANs: {vlan_ids}")
 
     if not vlan_ids:
